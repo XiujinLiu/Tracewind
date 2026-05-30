@@ -28,40 +28,27 @@ import svgwrite
 
 try:
     import potrace
-except ImportError as exc:  # pragma: no cover - only triggered on missing dependency.
+except ImportError as exc:
     raise SystemExit(
         "Missing dependency: potrace / pypotrace.\n"
         "Install it first, for example: pip install pypotrace"
     ) from exc
 
 
-# =============================================================================
-# Global tuning knobs
-# =============================================================================
-
-# 魔棒颜色容差：值越大，越容易把相近颜色合并进同一区域。
 COLOR_TOLERANCE = 24
 
-# RDP 精简系数：epsilon = RDP_FACTOR * contour_perimeter。
-# 默认 0.005 通常能明显减少轮廓点，同时避免轮廓被过度削平。
 RDP_FACTOR = 0.005
 
-# Potrace 路径合并容差：值越大，Potrace 越愿意合并相近曲线段，节点更少但形状更松。
 OPT_TOLERANCE = 0.4
 
-# RDP 前的闭合轮廓平滑半径。0 表示不平滑；越大越柔和，但细节会减少。
 CURVE_SMOOTHING_RADIUS = 2
 
-# Potrace 碎点过滤阈值：面积小于该值的噪点路径会被丢弃。
 POTRACE_TURDSIZE = 10
 
-# Potrace 曲线平滑偏好：略高于默认值时，轮廓更倾向贝塞尔平滑拟合。
 POTRACE_ALPHAMAX = 1.3
 
-# 形态学开运算核大小。3x3 足以去掉大部分单像素毛刺，且不容易吞掉细节。
 MORPH_KERNEL_SIZE = 3
 
-# 预览窗口最大占用屏幕比例；只影响交互显示，不影响 SVG 输出尺寸。
 DISPLAY_WIDTH_FRACTION = 2 / 3
 DISPLAY_HEIGHT_FRACTION = 2 / 3
 FALLBACK_SCREEN_SIZE = (1400, 900)
@@ -181,12 +168,10 @@ class TraceWandApp:
         self._mark_retrace_pending()
 
     def _on_rdp_change(self, value: int) -> None:
-        # 滑块只能传整数；这里把 50 映射为 0.005，方便细调 RDP 强度。
         self.rdp_factor = max(0.0, value / RDP_TRACKBAR_SCALE)
         self._mark_retrace_pending()
 
     def _on_opt_change(self, value: int) -> None:
-        # 滑块只能传整数；这里把 40 映射为 0.4，方便细调 Potrace 路径合并容差。
         self.opt_tolerance = max(0.0, value / OPT_TRACKBAR_SCALE)
         self._mark_retrace_pending()
 
@@ -225,7 +210,7 @@ class TraceWandApp:
     def _trace_and_update_preview(self, image_x: int, image_y: int, label: str) -> None:
         try:
             result = self.trace_click(image_x, image_y)
-        except Exception as exc:  # Keep the interactive window alive after one bad click.
+        except Exception as exc:
             self.last_result = None
             print(
                 f"[TraceWand] Failed to trace click ({image_x}, {image_y}): {exc}",
@@ -302,12 +287,10 @@ class TraceWandApp:
     def _build_preview(self, optimized_mask: np.ndarray) -> np.ndarray:
         preview = self.image_bgr.copy()
 
-        # 半透明高亮选区内部，让用户能看到最终被 Potrace 接收的优化后区域。
         overlay = preview.copy()
         overlay[optimized_mask > 0] = (0, 220, 255)
         preview = cv2.addWeighted(overlay, 0.28, preview, 0.72, 0)
 
-        # 用最终优化掩膜提取边缘并绘制；这里显示的是“瘦身后”的轮廓，不是原始 floodFill 边缘。
         contours, _hierarchy = cv2.findContours(
             optimized_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
@@ -432,9 +415,6 @@ def optimize_mask_for_low_node_svg(
     if selected_mask.dtype != np.uint8:
         selected_mask = selected_mask.astype(np.uint8)
 
-    # Step 3.1 - 形态学去噪：
-    # 开运算 = 先腐蚀再膨胀，可以去掉边缘单像素毛刺、孤立噪点和锯齿尖刺。
-    # 这些微小突起如果直接交给 Potrace，往往会变成额外的直线段或贝塞尔节点。
     kernel = cv2.getStructuringElement(
         cv2.MORPH_RECT,
         (MORPH_KERNEL_SIZE, MORPH_KERNEL_SIZE),
@@ -454,20 +434,12 @@ def optimize_mask_for_low_node_svg(
         if len(contour) < 3:
             continue
 
-        # RDP 本质是折线算法，不会直接拟合贝塞尔曲线；这里先对闭合轮廓做周期平滑，
-        # 把像素级锯齿转成更连续的走向，再交给 approxPolyDP。这样可以避免圆弧在
-        # RDP 阶段过早变成硬折线，让后续 Potrace 更容易识别并输出 C 曲线段。
         contour_for_rdp = smooth_closed_contour(contour, smoothing_radius)
 
         perimeter = cv2.arcLength(contour_for_rdp, closed=True)
         if perimeter <= 0:
             continue
 
-        # Step 3.2 - RDP 轮廓精简：
-        # approxPolyDP 会用 epsilon 控制“允许偏离原轮廓的最大距离”，剔除冗余共线点
-        # 和像素级抖动点。epsilon 与周长成比例，可以让大区域获得更强压缩，小区域保留细节。
-        # 重新绘制到全新黑色掩膜，是为了把简化后的几何边界固化下来，让 Potrace 面对的是
-        # 已经减少折点的干净形状，而不是原始像素边缘。
         epsilon = rdp_factor * perimeter
         simplified = cv2.approxPolyDP(contour_for_rdp, epsilon=epsilon, closed=True)
         if len(simplified) >= 3:
@@ -516,11 +488,6 @@ def potrace_mask_to_svg_path(
     """
     binary = (mask > 0).astype(np.uint8)
 
-    # Step 3.3 - Potrace 后期优化：
-    # turdsize=10 会丢弃很小的碎片路径，避免噪点各自生成独立 SVG 子路径。
-    # alphamax=1.3 让 Potrace 更倾向使用平滑曲线拟合转角，通常能减少尖锐折线节点。
-    # opttolerance=opt_tolerance 启用/加强 Potrace 的曲线优化与路径合并，
-    # 在可接受形变范围内合并相近贝塞尔段，从底层进一步压缩节点数量。
     bitmap = potrace.Bitmap(binary)
     path_collection = bitmap.trace(
         turdsize=POTRACE_TURDSIZE,

@@ -14,6 +14,11 @@ The workflow is similar to a magic wand selection tool: open an image, click a p
 
 ## Installation
 
+```bash
+sudo apt update
+sudo apt install -y build-essential pkg-config libpotrace-dev potrace libagg-dev python3-tk
+```
+
 Create and activate a Conda environment:
 
 ```bash
@@ -25,22 +30,6 @@ Install the Python dependencies:
 
 ```bash
 conda install -c conda-forge opencv numpy svgwrite -y
-```
-
-Install Potrace build dependencies on macOS:
-
-```bash
-brew install libagg potrace pkg-config
-```
-
-Make sure the build tools can find the Homebrew libraries:
-
-```bash
-export PKG_CONFIG_PATH="$(brew --prefix libagg)/lib/pkgconfig:$(brew --prefix potrace)/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:$PKG_CONFIG_PATH"
-export CFLAGS="-I$(brew --prefix potrace)/include -I$(brew --prefix libagg)/include $CFLAGS"
-export CPPFLAGS="-I$(brew --prefix potrace)/include -I$(brew --prefix libagg)/include $CPPFLAGS"
-export CXXFLAGS="-I$(brew --prefix potrace)/include -I$(brew --prefix libagg)/include $CXXFLAGS"
-export LDFLAGS="-L$(brew --prefix potrace)/lib -L$(brew --prefix libagg)/lib -Wl,-rpath,$(brew --prefix potrace)/lib -Wl,-rpath,$(brew --prefix libagg)/lib $LDFLAGS"
 ```
 
 Install `pypotrace`:
@@ -57,16 +46,16 @@ python -c "import cv2, numpy, svgwrite, potrace; print('ok')"
 
 ## Usage
 
-Run TraceWand with an image path:
+Run TraceWand with an image path: (work for both jpg and png)
 
 ```bash
-python3 tracewand.py path/to/image.jpg
+python src/tracewand.py path/to/image.jpg
 ```
 
 Example:
 
 ```bash
-python3 tracewand.py tests/test_image.jpg
+python src/tracewand.py example_tests/test1.png
 ```
 
 Controls:
@@ -87,7 +76,7 @@ The exported SVG keeps the original image dimensions and coordinate system, even
 ## Command-Line Options
 
 ```bash
-python3 tracewand.py image.jpg --tolerance 24 --rdp-factor 0.005 --opt-tolerance 0.4 --smooth 2
+python src/tracewand.py path/to/image.jpg --tolerance 24 --rdp-factor 0.005 --opt-tolerance 0.4 --smooth 2
 ```
 
 Available options:
@@ -129,4 +118,3 @@ If you use TraceWand in academic or research work, please cite it as:
   note         = {Personal and non-commercial use only}
 }
 ```
-# Tracewind
